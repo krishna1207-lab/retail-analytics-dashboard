@@ -29,7 +29,7 @@ A comprehensive retail analytics dashboard built with Streamlit and FastAPI, pro
 
 1. **Clone the repository:**
    ```bash
-   git clone <your-repo-url>
+   git clone https://github.com/krishna1207-lab/retail-analytics-dashboard.git
    cd retail-analytics-dashboard
    ```
 
@@ -62,6 +62,32 @@ A comprehensive retail analytics dashboard built with Streamlit and FastAPI, pro
    - Streamlit Dashboard: `http://localhost:8501`
    - FastAPI Server: `http://localhost:8000`
    - API Documentation: `http://localhost:8000/docs`
+
+## 📁 Repository Structure
+
+```
+retail-analytics-dashboard/
+├── 📊 streamlit_app.py              # Main Streamlit dashboard
+├── 🚀 fastapi_app.py                # FastAPI backend server
+├── 🤖 ml_models.py                  # Machine learning models
+├── 🔄 data_pipeline.py              # Data processing pipeline
+├── 📈 customer_shopping.csv         # Main dataset
+├── 📋 requirements.txt              # Python dependencies
+├── 📖 README.md                     # This file
+├── 🗂️ models/                       # Pre-trained ML models
+│   ├── customer_segmentation_model.pkl
+│   ├── demand_forecasting_model.pkl
+│   ├── kmeans_model.pkl
+│   ├── label_encoders.pkl
+│   ├── profitability_model.pkl
+│   └── scaler.pkl
+└── 📊 processed_data/               # Processed datasets
+    ├── customer_metrics_latest.csv
+    ├── rfm_analysis_latest.csv
+    ├── product_metrics_latest.csv
+    ├── insights_latest.json
+    └── transactions_latest.csv
+```
 
 ## 📊 Data Requirements
 
