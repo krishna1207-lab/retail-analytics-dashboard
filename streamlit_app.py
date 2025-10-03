@@ -311,14 +311,14 @@ def show_customer_segmentation_rfm():
     with col4:
         st.metric("Avg Revenue (Top 10%)", f"${top_customers['total_revenue'].mean():,.2f}")
     
-        col1, col2 = st.columns(2)
-        
-        with col1:
+    col1, col2 = st.columns(2)
+    
+    with col1:
         # Top 10% customers by revenue (bar chart)
         fig_top_customers = px.bar(
             top_customers.head(20),  # Show top 20 for better visualization
-                x='customer_id',
-                y='total_revenue',
+            x='customer_id',
+            y='total_revenue',
             title=f"Top {top_10_percent} Customers by Revenue (Top 20 Shown)",
             labels={'customer_id': 'Customer ID', 'total_revenue': 'Revenue ($)'},
             color='total_revenue',
