@@ -51,6 +51,13 @@ def show_store_region_performance():
     """Store vs Region Performance - Combined Store Performance + Top Customers"""
     st.header("🏪 Store/Region Performance")
     
+    # Load data from local files
+    try:
+        customer_data = pd.read_csv('customer_shopping.csv')
+    except:
+        st.error("Could not load customer data. Please ensure customer_shopping.csv is available.")
+        return
+    
     # Store Performance
     st.subheader("🏪 Store Performance Analysis")
     store_data = fetch_api_data("/insights/store-performance")
@@ -82,6 +89,55 @@ def show_store_region_performance():
             )
             fig_transactions.update_layout(xaxis_tickangle=45)
             st.plotly_chart(fig_transactions, use_container_width=True)
+    else:
+        # Fallback: Use local data for store performance
+        st.info("📊 Using local data for analysis")
+        
+        # Calculate store performance from local data
+        if 'store_id' in customer_data.columns:
+            store_performance = customer_data.groupby('store_id').agg({
+                'price': ['sum', 'count'],
+                'customer_id': 'nunique'
+            }).round(2)
+            store_performance.columns = ['total_revenue', 'transaction_count', 'unique_customers']
+            store_performance = store_performance.reset_index()
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                fig_store = px.bar(
+                    store_performance,
+                    x='store_id',
+                    y='total_revenue',
+                    title="Revenue by Store",
+                    labels={'store_id': 'Store ID', 'total_revenue': 'Revenue ($)'}
+                )
+                fig_store.update_layout(xaxis_tickangle=45)
+                st.plotly_chart(fig_store, use_container_width=True)
+            
+            with col2:
+                fig_transactions = px.bar(
+                    store_performance,
+                    x='store_id',
+                    y='transaction_count',
+                    title="Transactions by Store",
+                    labels={'store_id': 'Store ID', 'transaction_count': 'Transaction Count'}
+                )
+                fig_transactions.update_layout(xaxis_tickangle=45)
+                st.plotly_chart(fig_transactions, use_container_width=True)
+        else:
+            st.warning("Store ID column not found in data. Showing general performance metrics.")
+            
+            # Show general metrics
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Total Revenue", f"${customer_data['price'].sum():,.2f}")
+            with col2:
+                st.metric("Total Transactions", f"{len(customer_data):,}")
+            with col3:
+                st.metric("Unique Customers", f"{customer_data['customer_id'].nunique():,}")
+            with col4:
+                st.metric("Average Order Value", f"${customer_data['price'].mean():.2f}")
     
     # Top Customers
     st.subheader("👑 Top Customers Analysis")
@@ -108,6 +164,35 @@ def show_store_region_performance():
             fig_dist = px.pie(
                 top_customers.head(10),
                 values='total_revenue',
+                names='customer_id',
+                title="Revenue Distribution - Top 10 Customers"
+            )
+    else:
+        # Fallback: Calculate top customers from local data
+        top_customers_local = customer_data.groupby('customer_id').agg({
+            'price': 'sum',
+            'customer_id': 'count'
+        }).rename(columns={'customer_id': 'transaction_count'})
+        top_customers_local = top_customers_local.reset_index()
+        top_customers_local = top_customers_local.sort_values('price', ascending=False).head(10)
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            fig_top = px.bar(
+                top_customers_local,
+                x='customer_id',
+                y='price',
+                title="Top 10 Customers by Revenue",
+                labels={'customer_id': 'Customer ID', 'price': 'Revenue ($)'}
+            )
+            fig_top.update_layout(xaxis_tickangle=45)
+            st.plotly_chart(fig_top, use_container_width=True)
+        
+        with col2:
+            fig_dist = px.pie(
+                top_customers_local,
+                values='price',
                 names='customer_id',
                 title="Revenue Distribution - Top 10 Customers"
             )
