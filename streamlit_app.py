@@ -94,8 +94,8 @@ def show_store_region_performance():
         st.info("📊 Using local data for analysis")
         
         # Calculate store performance from local data
-        if 'store_id' in customer_data.columns:
-            store_performance = customer_data.groupby('store_id').agg({
+        if 'shopping_mall' in customer_data.columns:
+            store_performance = customer_data.groupby('shopping_mall').agg({
                 'price': ['sum', 'count'],
                 'customer_id': 'nunique'
             }).round(2)
@@ -107,10 +107,10 @@ def show_store_region_performance():
             with col1:
                 fig_store = px.bar(
                     store_performance,
-                    x='store_id',
+                    x='shopping_mall',
                     y='total_revenue',
-                    title="Revenue by Store",
-                    labels={'store_id': 'Store ID', 'total_revenue': 'Revenue ($)'}
+                    title="Revenue by Shopping Mall",
+                    labels={'shopping_mall': 'Shopping Mall', 'total_revenue': 'Revenue ($)'}
                 )
                 fig_store.update_layout(xaxis_tickangle=45)
                 st.plotly_chart(fig_store, use_container_width=True)
@@ -118,15 +118,15 @@ def show_store_region_performance():
             with col2:
                 fig_transactions = px.bar(
                     store_performance,
-                    x='store_id',
+                    x='shopping_mall',
                     y='transaction_count',
-                    title="Transactions by Store",
-                    labels={'store_id': 'Store ID', 'transaction_count': 'Transaction Count'}
+                    title="Transactions by Shopping Mall",
+                    labels={'shopping_mall': 'Shopping Mall', 'transaction_count': 'Transaction Count'}
                 )
                 fig_transactions.update_layout(xaxis_tickangle=45)
                 st.plotly_chart(fig_transactions, use_container_width=True)
         else:
-            st.warning("Store ID column not found in data. Showing general performance metrics.")
+            st.warning("Shopping Mall column not found in data. Showing general performance metrics.")
             
             # Show general metrics
             col1, col2, col3, col4 = st.columns(4)
