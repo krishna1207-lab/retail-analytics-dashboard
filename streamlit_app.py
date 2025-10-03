@@ -202,11 +202,18 @@ def show_customer_segmentation_rfm():
     """Customer Segmentation & RFM - Combined Customer Insights + RFM Analysis"""
     st.header("👥 Customer Segmentation & RFM Analysis")
     
+    # Load data from local files
+    try:
+        customer_data = pd.read_csv('customer_shopping.csv')
+    except:
+        st.error("Could not load customer data. Please ensure customer_shopping.csv is available.")
+        return
+    
     # Customer Segmentation
     st.subheader("🎯 Customer Segmentation")
-    customer_data = fetch_api_data("/insights/customer-segmentation")
+    api_customer_data = fetch_api_data("/insights/customer-segmentation")
     
-    if customer_data:
+    if api_customer_data:
         # Load customer metrics as fallback
         try:
             customer_metrics = pd.read_csv('processed_data/customer_metrics_latest.csv', index_col=0)
@@ -268,6 +275,68 @@ def show_customer_segmentation_rfm():
                     )
                     fig_ml_revenue.update_layout(xaxis_tickangle=45)
                     st.plotly_chart(fig_ml_revenue, use_container_width=True)
+    else:
+        # Fallback: Create customer segmentation from local data
+        st.info("📊 Using local data for customer segmentation analysis")
+        
+        # Calculate customer metrics from local data
+        customer_metrics = customer_data.groupby('customer_id').agg({
+            'price': ['sum', 'count', 'mean'],
+            'invoice_date': ['min', 'max']
+        }).round(2)
+        
+        customer_metrics.columns = ['total_revenue', 'transaction_count', 'avg_order_value', 'first_purchase', 'last_purchase']
+        customer_metrics = customer_metrics.reset_index()
+        
+        # Create value-based segments
+        customer_metrics['value_segment'] = pd.cut(
+            customer_metrics['total_revenue'],
+            bins=[0, 1000, 5000, float('inf')],
+            labels=['Low Value', 'Medium Value', 'High Value']
+        )
+        
+        # Create frequency segments
+        customer_metrics['frequency_segment'] = pd.cut(
+            customer_metrics['transaction_count'],
+            bins=[0, 2, 5, float('inf')],
+            labels=['Low Frequency', 'Medium Frequency', 'High Frequency']
+        )
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Value-based segmentation
+            segment_counts = customer_metrics['value_segment'].value_counts()
+            fig_segments = px.pie(
+                values=segment_counts.values,
+                names=segment_counts.index,
+                title="Customer Distribution by Value Segment"
+            )
+            st.plotly_chart(fig_segments, use_container_width=True)
+        
+        with col2:
+            # Revenue by segment
+            segment_revenue = customer_metrics.groupby('value_segment')['total_revenue'].sum().reset_index()
+            fig_revenue = px.bar(
+                segment_revenue,
+                x='value_segment',
+                y='total_revenue',
+                title="Revenue by Customer Segment",
+                labels={'value_segment': 'Customer Segment', 'total_revenue': 'Revenue ($)'}
+            )
+            fig_revenue.update_layout(xaxis_tickangle=45)
+            st.plotly_chart(fig_revenue, use_container_width=True)
+        
+        # Show customer metrics summary
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Total Customers", f"{len(customer_metrics):,}")
+        with col2:
+            st.metric("High Value Customers", f"{len(customer_metrics[customer_metrics['value_segment'] == 'High Value']):,}")
+        with col3:
+            st.metric("Avg Revenue per Customer", f"${customer_metrics['total_revenue'].mean():.2f}")
+        with col4:
+            st.metric("Avg Transactions per Customer", f"{customer_metrics['transaction_count'].mean():.1f}")
     
     # RFM Analysis
     st.subheader("📊 RFM Analysis")
@@ -331,6 +400,95 @@ def show_customer_segmentation_rfm():
                 if not customer_metrics.empty and 'value_segment' in customer_metrics.columns:
                     high_value = customer_metrics[customer_metrics['value_segment'] == 'High-Value']
                     st.metric("High-Value", f"{len(high_value):,}", f"{len(high_value)/len(customer_metrics)*100:.1f}%")
+    else:
+        # Fallback: Create RFM analysis from local data
+        st.info("📊 Using local data for RFM analysis")
+        
+        # Calculate RFM metrics from local data
+        from datetime import datetime
+        
+        # Convert invoice_date to datetime
+        customer_data['invoice_date'] = pd.to_datetime(customer_data['invoice_date'])
+        
+        # Calculate RFM metrics
+        rfm_data = customer_data.groupby('customer_id').agg({
+            'invoice_date': 'max',  # Recency
+            'customer_id': 'count',  # Frequency
+            'price': 'sum'  # Monetary
+        }).rename(columns={'customer_id': 'frequency', 'price': 'monetary'})
+        
+        # Calculate recency (days since last purchase)
+        rfm_data['recency'] = (datetime.now() - rfm_data['invoice_date']).dt.days
+        
+        # Create RFM scores (1-5 scale)
+        rfm_data['R_score'] = pd.qcut(rfm_data['recency'], 5, labels=[5,4,3,2,1])
+        rfm_data['F_score'] = pd.qcut(rfm_data['frequency'], 5, labels=[1,2,3,4,5])
+        rfm_data['M_score'] = pd.qcut(rfm_data['monetary'], 5, labels=[1,2,3,4,5])
+        
+        # Create RFM segments
+        rfm_data['RFM_Segment'] = rfm_data['R_score'].astype(str) + rfm_data['F_score'].astype(str) + rfm_data['M_score'].astype(str)
+        
+        # Define segment names
+        segment_mapping = {
+            '555': 'Champions', '554': 'Champions', '544': 'Champions', '545': 'Champions',
+            '455': 'Loyal Customers', '454': 'Loyal Customers', '445': 'Loyal Customers',
+            '355': 'Potential Loyalists', '354': 'Potential Loyalists', '345': 'Potential Loyalists',
+            '255': 'New Customers', '254': 'New Customers', '245': 'New Customers',
+            '155': 'Promising', '154': 'Promising', '145': 'Promising',
+            '111': 'Lost Customers', '112': 'Lost Customers', '113': 'Lost Customers',
+            '211': 'At Risk', '212': 'At Risk', '213': 'At Risk'
+        }
+        
+        rfm_data['RFM_Segment'] = rfm_data['RFM_Segment'].map(segment_mapping).fillna('Others')
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # RFM segments distribution
+            rfm_segment_analysis = rfm_data.groupby('RFM_Segment').agg({
+                'monetary': 'sum',
+                'frequency': 'sum'
+            }).reset_index()
+            
+            fig_customers = px.bar(
+                rfm_segment_analysis,
+                x='RFM_Segment',
+                y='frequency',
+                title="Customer Count by RFM Segment",
+                labels={'RFM_Segment': 'RFM Segment', 'frequency': 'Customer Count'}
+            )
+            fig_customers.update_layout(xaxis_tickangle=45)
+            st.plotly_chart(fig_customers, use_container_width=True)
+        
+        with col2:
+            # RFM segments revenue
+            fig_rfm_revenue = px.bar(
+                rfm_segment_analysis,
+                x='RFM_Segment',
+                y='monetary',
+                title="Revenue by RFM Segment",
+                labels={'RFM_Segment': 'RFM Segment', 'monetary': 'Revenue ($)'}
+            )
+            fig_rfm_revenue.update_layout(xaxis_tickangle=45)
+            st.plotly_chart(fig_rfm_revenue, use_container_width=True)
+        
+        # Key segments summary
+        st.subheader("🏆 Key Customer Segments Summary")
+        
+        champions = rfm_data[rfm_data['RFM_Segment'] == 'Champions']
+        at_risk = rfm_data[rfm_data['RFM_Segment'] == 'At Risk']
+        lost_customers = rfm_data[rfm_data['RFM_Segment'] == 'Lost Customers']
+        loyal_customers = rfm_data[rfm_data['RFM_Segment'] == 'Loyal Customers']
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Champions", f"{len(champions):,}", f"{len(champions)/len(rfm_data)*100:.1f}%")
+        with col2:
+            st.metric("At Risk", f"{len(at_risk):,}", f"{len(at_risk)/len(rfm_data)*100:.1f}%")
+        with col3:
+            st.metric("Lost Customers", f"{len(lost_customers):,}", f"{len(lost_customers)/len(rfm_data)*100:.1f}%")
+        with col4:
+            st.metric("Loyal Customers", f"{len(loyal_customers):,}", f"{len(loyal_customers)/len(rfm_data)*100:.1f}%")
 
 def show_profitability_analysis():
     """Profitability Analysis - Combines Financial Analysis + Discount Impact"""
