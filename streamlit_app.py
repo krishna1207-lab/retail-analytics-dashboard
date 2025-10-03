@@ -594,6 +594,13 @@ def show_profitability_analysis():
     """Profitability Analysis - Combines Financial Analysis + Discount Impact"""
     st.header("💰 Profitability Analysis")
     
+    # Load data from local files
+    try:
+        customer_data = pd.read_csv('customer_shopping.csv')
+    except:
+        st.error("Could not load customer data. Please ensure customer_shopping.csv is available.")
+        return
+    
     # Discount Impact Analysis
     st.subheader("💸 Discount Impact on Profitability")
     discount_data = fetch_api_data("/insights/discount-impact")
@@ -817,6 +824,202 @@ def show_profitability_analysis():
         # Show discount scenarios table
         st.subheader("📊 Discount Scenarios Analysis")
         st.dataframe(scenarios_df.round(2), use_container_width=True)
+    else:
+        # Fallback: Create profitability analysis from local data
+        st.info("📊 Using local data for profitability analysis")
+        
+        # Revenue Analysis
+        st.subheader("📊 Revenue Analysis")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Revenue by category
+            category_revenue = customer_data.groupby('category')['price'].sum().reset_index()
+            category_revenue = category_revenue.sort_values('price', ascending=False)
+            
+            fig_category = px.bar(
+                category_revenue,
+                x='category',
+                y='price',
+                title="Revenue by Category",
+                labels={'category': 'Category', 'price': 'Revenue ($)'}
+            )
+            fig_category.update_layout(xaxis_tickangle=45)
+            st.plotly_chart(fig_category, use_container_width=True)
+        
+        with col2:
+            # Revenue by shopping mall
+            mall_revenue = customer_data.groupby('shopping_mall')['price'].sum().reset_index()
+            mall_revenue = mall_revenue.sort_values('price', ascending=False)
+            
+            fig_mall = px.bar(
+                mall_revenue,
+                x='shopping_mall',
+                y='price',
+                title="Revenue by Shopping Mall",
+                labels={'shopping_mall': 'Shopping Mall', 'price': 'Revenue ($)'}
+            )
+            fig_mall.update_layout(xaxis_tickangle=45)
+            st.plotly_chart(fig_mall, use_container_width=True)
+        
+        # Profitability Metrics
+        st.subheader("💰 Profitability Metrics")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            total_revenue = customer_data['price'].sum()
+            st.metric("Total Revenue", f"${total_revenue:,.2f}")
+        with col2:
+            avg_order_value = customer_data['price'].mean()
+            st.metric("Average Order Value", f"${avg_order_value:.2f}")
+        with col3:
+            total_transactions = len(customer_data)
+            st.metric("Total Transactions", f"{total_transactions:,}")
+        with col4:
+            unique_customers = customer_data['customer_id'].nunique()
+            st.metric("Unique Customers", f"{unique_customers:,}")
+        
+        # Category Performance Analysis
+        st.subheader("📈 Category Performance Analysis")
+        
+        category_analysis = customer_data.groupby('category').agg({
+            'price': ['sum', 'mean', 'count'],
+            'customer_id': 'nunique',
+            'quantity': 'sum'
+        }).round(2)
+        
+        category_analysis.columns = ['total_revenue', 'avg_price', 'transaction_count', 'unique_customers', 'total_quantity']
+        category_analysis = category_analysis.reset_index()
+        category_analysis = category_analysis.sort_values('total_revenue', ascending=False)
+        
+        # Top performing categories
+        st.write("**Top 10 Categories by Revenue:**")
+        top_categories = category_analysis.head(10)
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            fig_top_categories = px.bar(
+                top_categories,
+                x='category',
+                y='total_revenue',
+                title="Top 10 Categories by Revenue",
+                labels={'category': 'Category', 'total_revenue': 'Revenue ($)'}
+            )
+            fig_top_categories.update_layout(xaxis_tickangle=45)
+            st.plotly_chart(fig_top_categories, use_container_width=True)
+        
+        with col2:
+            fig_avg_price = px.bar(
+                top_categories,
+                x='category',
+                y='avg_price',
+                title="Average Price by Category",
+                labels={'category': 'Category', 'avg_price': 'Average Price ($)'}
+            )
+            fig_avg_price.update_layout(xaxis_tickangle=45)
+            st.plotly_chart(fig_avg_price, use_container_width=True)
+        
+        # Customer Value Analysis
+        st.subheader("👥 Customer Value Analysis")
+        
+        customer_value = customer_data.groupby('customer_id').agg({
+            'price': ['sum', 'count', 'mean'],
+            'quantity': 'sum'
+        }).round(2)
+        
+        customer_value.columns = ['total_spent', 'transaction_count', 'avg_order_value', 'total_quantity']
+        customer_value = customer_value.reset_index()
+        customer_value = customer_value.sort_values('total_spent', ascending=False)
+        
+        # Customer segments based on spending
+        customer_value['value_segment'] = pd.cut(
+            customer_value['total_spent'],
+            bins=[0, 1000, 5000, 10000, float('inf')],
+            labels=['Low Value', 'Medium Value', 'High Value', 'Premium']
+        )
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            segment_counts = customer_value['value_segment'].value_counts()
+            fig_segments = px.pie(
+                values=segment_counts.values,
+                names=segment_counts.index,
+                title="Customer Value Distribution"
+            )
+            st.plotly_chart(fig_segments, use_container_width=True)
+        
+        with col2:
+            segment_revenue = customer_value.groupby('value_segment')['total_spent'].sum().reset_index()
+            fig_segment_revenue = px.bar(
+                segment_revenue,
+                x='value_segment',
+                y='total_spent',
+                title="Revenue by Customer Value Segment",
+                labels={'value_segment': 'Customer Segment', 'total_spent': 'Total Revenue ($)'}
+            )
+            st.plotly_chart(fig_segment_revenue, use_container_width=True)
+        
+        # Discount Impact Simulation
+        st.subheader("💸 Discount Impact Simulation")
+        
+        # Simulate different discount scenarios
+        discount_scenarios = [0, 5, 10, 15, 20, 25]
+        scenario_results = []
+        
+        for discount in discount_scenarios:
+            # Calculate revenue with discount
+            discounted_revenue = total_revenue * (1 - discount/100)
+            # Estimate volume increase (assume 1% increase per 1% discount)
+            volume_increase = 1 + (discount * 0.01)
+            adjusted_revenue = discounted_revenue * volume_increase
+            net_impact = adjusted_revenue - total_revenue
+            
+            scenario_results.append({
+                'Discount %': discount,
+                'Original Revenue': total_revenue,
+                'Discounted Revenue': discounted_revenue,
+                'Volume Adjusted Revenue': adjusted_revenue,
+                'Net Impact': net_impact,
+                'ROI %': (net_impact / total_revenue) * 100
+            })
+        
+        scenario_df = pd.DataFrame(scenario_results)
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            fig_discount_impact = px.line(
+                scenario_df,
+                x='Discount %',
+                y='Volume Adjusted Revenue',
+                title="Revenue Impact of Discounts",
+                labels={'Discount %': 'Discount Percentage', 'Volume Adjusted Revenue': 'Revenue ($)'}
+            )
+            st.plotly_chart(fig_discount_impact, use_container_width=True)
+        
+        with col2:
+            fig_roi = px.bar(
+                scenario_df,
+                x='Discount %',
+                y='ROI %',
+                title="ROI by Discount Level",
+                labels={'Discount %': 'Discount Percentage', 'ROI %': 'ROI (%)'}
+            )
+            st.plotly_chart(fig_roi, use_container_width=True)
+        
+        # Show scenario results table
+        st.subheader("📊 Discount Scenario Results")
+        st.dataframe(scenario_df.round(2), use_container_width=True)
+        
+        # Key Insights
+        st.subheader("💡 Key Insights")
+        best_scenario = scenario_df.loc[scenario_df['ROI %'].idxmax()]
+        st.markdown(f"**Best Discount Strategy:** {best_scenario['Discount %']}% discount with {best_scenario['ROI %']:.1f}% ROI")
+        st.markdown(f"**Revenue Impact:** ${best_scenario['Net Impact']:,.2f}")
+        st.markdown(f"**Adjusted Revenue:** ${best_scenario['Volume Adjusted Revenue']:,.2f}")
 
 def show_seasonal_trend_analysis():
     """Seasonal Trend Analysis - Combines Seasonality + Repeat vs One-time"""
