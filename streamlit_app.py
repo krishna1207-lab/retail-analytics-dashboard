@@ -326,15 +326,15 @@ def show_customer_segmentation_rfm():
         )
         fig_top_customers.update_layout(xaxis_tickangle=45, showlegend=False)
         st.plotly_chart(fig_top_customers, use_container_width=True)
-        
-        with col2:
+    
+    with col2:
         # Revenue distribution of top customers
         fig_top_dist = px.pie(
             top_customers.head(10),  # Show top 10 for pie chart
-                values='total_revenue',
-                names='customer_id',
-                title="Revenue Distribution - Top 10 Customers"
-            )
+            values='total_revenue',
+            names='customer_id',
+            title="Revenue Distribution - Top 10 Customers"
+        )
         st.plotly_chart(fig_top_dist, use_container_width=True)
     
     # Top 10% Customer Details Table
