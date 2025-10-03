@@ -4,13 +4,11 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import numpy as np
-import warnings
-warnings.filterwarnings('ignore')
 
 # Page configuration
 st.set_page_config(
     page_title="Retail Analytics Dashboard",
-    page_icon="📊",
+    page_icon="🛍️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -20,7 +18,6 @@ st.markdown("""
 <style>
     .main-header {
         font-size: 2.5rem;
-        font-weight: bold;
         color: #1f77b4;
         text-align: center;
         margin-bottom: 2rem;
@@ -30,6 +27,9 @@ st.markdown("""
         padding: 1rem;
         border-radius: 0.5rem;
         border-left: 4px solid #1f77b4;
+    }
+    .stAlert {
+        margin-top: 1rem;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -64,11 +64,11 @@ def store_region_performance(df):
     """Store vs Region Performance Analysis"""
     st.header("🏪 Store vs Region Performance")
     
-    if 'shopping_mall' not in df.columns:
-        st.warning("Shopping Mall column not found in data")
+    if df is None or df.empty:
+        st.error("No data available for analysis")
         return
     
-    # Store performance metrics
+    # Calculate store performance metrics
     store_performance = df.groupby('shopping_mall').agg({
         'price': ['sum', 'count', 'mean'],
         'customer_id': 'nunique',
@@ -94,12 +94,11 @@ def store_region_performance(df):
     
     with col1:
         fig_revenue = px.bar(
-            store_performance,
-            x='shopping_mall',
-            y='total_revenue',
+            x=store_performance.index,
+            y=store_performance['total_revenue'],
             title="Revenue by Store",
-            labels={'shopping_mall': 'Store', 'total_revenue': 'Revenue ($)'},
-            color='total_revenue',
+            labels={'x': 'Store', 'y': 'Revenue ($)'},
+            color=store_performance['total_revenue'],
             color_continuous_scale='Blues'
         )
         fig_revenue.update_layout(xaxis_tickangle=45, showlegend=False)
@@ -107,12 +106,11 @@ def store_region_performance(df):
     
     with col2:
         fig_transactions = px.bar(
-            store_performance,
-            x='shopping_mall',
-            y='transaction_count',
+            x=store_performance.index,
+            y=store_performance['transaction_count'],
             title="Transaction Volume by Store",
-            labels={'shopping_mall': 'Store', 'transaction_count': 'Transactions'},
-            color='transaction_count',
+            labels={'x': 'Store', 'y': 'Transactions'},
+            color=store_performance['transaction_count'],
             color_continuous_scale='Greens'
         )
         fig_transactions.update_layout(xaxis_tickangle=45, showlegend=False)
@@ -123,12 +121,11 @@ def store_region_performance(df):
     
     with col1:
         fig_aov = px.bar(
-            store_performance,
-            x='shopping_mall',
-            y='avg_order_value',
+            x=store_performance.index,
+            y=store_performance['avg_order_value'],
             title="Average Order Value by Store",
-            labels={'shopping_mall': 'Store', 'avg_order_value': 'AOV ($)'},
-            color='avg_order_value',
+            labels={'x': 'Store', 'y': 'AOV ($)'},
+            color=store_performance['avg_order_value'],
             color_continuous_scale='Oranges'
         )
         fig_aov.update_layout(xaxis_tickangle=45, showlegend=False)
@@ -136,12 +133,11 @@ def store_region_performance(df):
     
     with col2:
         fig_customers = px.bar(
-            store_performance,
-            x='shopping_mall',
-            y='unique_customers',
+            x=store_performance.index,
+            y=store_performance['unique_customers'],
             title="Customer Count by Store",
-            labels={'shopping_mall': 'Store', 'unique_customers': 'Customers'},
-            color='unique_customers',
+            labels={'x': 'Store', 'y': 'Customers'},
+            color=store_performance['unique_customers'],
             color_continuous_scale='Purples'
         )
         fig_customers.update_layout(xaxis_tickangle=45, showlegend=False)
@@ -153,25 +149,62 @@ def store_region_performance(df):
     store_performance['transaction_rank'] = store_performance['transaction_count'].rank(ascending=False, method='dense').astype(int)
     store_performance['aov_rank'] = store_performance['avg_order_value'].rank(ascending=False, method='dense').astype(int)
     
-    display_df = store_performance[['total_revenue', 'transaction_count', 'avg_order_value', 'unique_customers', 'revenue_rank', 'transaction_rank', 'aov_rank']].copy()
-    display_df.columns = ['Total Revenue ($)', 'Transactions', 'Avg Order Value ($)', 'Customers', 'Revenue Rank', 'Transaction Rank', 'AOV Rank']
+    display_df = store_performance.reset_index()
+    display_df = display_df[['shopping_mall', 'total_revenue', 'transaction_count', 'avg_order_value', 'unique_customers', 'revenue_rank', 'transaction_rank', 'aov_rank']]
+    display_df.columns = ['Store', 'Revenue ($)', 'Transactions', 'Avg Order Value ($)', 'Customers', 'Revenue Rank', 'Transaction Rank', 'AOV Rank']
     
     st.dataframe(display_df, use_container_width=True)
+    
+    # Top and bottom performers
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("🏆 Top 3 Performers")
+        top_3 = store_performance.head(3)
+        for idx, (store, row) in enumerate(top_3.iterrows(), 1):
+            st.write(f"{idx}. **{store}**: ${row['total_revenue']:,.2f} revenue, {row['transaction_count']:,} transactions")
+    
+    with col2:
+        st.subheader("📉 Bottom 3 Performers")
+        bottom_3 = store_performance.tail(3)
+        for idx, (store, row) in enumerate(bottom_3.iterrows(), 1):
+            st.write(f"{idx}. **{store}**: ${row['total_revenue']:,.2f} revenue, {row['transaction_count']:,} transactions")
+    
+    # Performance insights
+    st.subheader("💡 Performance Insights")
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        best_store = store_performance.index[0]
+        best_revenue = store_performance.iloc[0]['total_revenue']
+        st.metric("Best Performing Store", f"{best_store}", f"${best_revenue:,.2f}")
+    
+    with col2:
+        revenue_gap = store_performance.iloc[0]['total_revenue'] - store_performance.iloc[-1]['total_revenue']
+        st.metric("Revenue Gap (Best vs Worst)", f"${revenue_gap:,.2f}")
+    
+    with col3:
+        avg_transactions = store_performance['transaction_count'].mean()
+        st.metric("Average Transactions per Store", f"{avg_transactions:,.0f}")
 
 def top_customers_analysis(df):
     """Top 10% Customers Analysis"""
     st.header("👑 Top 10% Customers Analysis")
     
+    if df is None or df.empty:
+        st.error("No data available for analysis")
+        return
+    
     # Calculate customer metrics
     customer_metrics = df.groupby('customer_id').agg({
         'price': ['sum', 'count', 'mean'],
-        'invoice_date': ['min', 'max']
+        'quantity': 'sum'
     }).round(2)
     
-    customer_metrics.columns = ['total_revenue', 'transaction_count', 'avg_order_value', 'first_purchase', 'last_purchase']
+    customer_metrics.columns = ['total_revenue', 'transaction_count', 'avg_order_value', 'total_quantity']
     customer_metrics = customer_metrics.sort_values('total_revenue', ascending=False)
     
-    # Top 10% customers
+    # Identify top 10% customers
     top_10_percent = int(len(customer_metrics) * 0.1)
     top_customers = customer_metrics.head(top_10_percent)
     
@@ -203,44 +236,46 @@ def top_customers_analysis(df):
         st.plotly_chart(fig_top, use_container_width=True)
     
     with col2:
-        fig_pie = px.pie(
-            top_customers.head(10),
-            values='total_revenue',
-            names='customer_id',
+        fig_dist = px.pie(
+            values=top_customers.head(10)['total_revenue'],
+            names=top_customers.head(10).index,
             title="Revenue Distribution - Top 10 Customers"
         )
-        st.plotly_chart(fig_pie, use_container_width=True)
+        st.plotly_chart(fig_dist, use_container_width=True)
     
-    # Top customers table
+    # Top customer details
     st.subheader("📋 Top 10% Customer Details")
-    top_customers['revenue_rank'] = top_customers['total_revenue'].rank(ascending=False, method='dense').astype(int)
-    top_customers['revenue_share'] = (top_customers['total_revenue'] / top_customers['total_revenue'].sum() * 100).round(2)
+    top_customers_display = top_customers.copy()
+    top_customers_display['rank'] = range(1, len(top_customers_display) + 1)
+    top_customers_display['revenue_share'] = (top_customers_display['total_revenue'] / customer_metrics['total_revenue'].sum() * 100).round(2)
     
-    display_df = top_customers[['total_revenue', 'transaction_count', 'avg_order_value', 'revenue_rank', 'revenue_share']].copy()
-    display_df.columns = ['Total Revenue ($)', 'Transactions', 'Avg Order Value ($)', 'Rank', 'Revenue Share (%)']
-    
-    st.dataframe(display_df, use_container_width=True)
+    display_cols = ['rank', 'total_revenue', 'transaction_count', 'avg_order_value', 'revenue_share']
+    st.dataframe(top_customers_display[display_cols], use_container_width=True)
 
 def value_segmentation(df):
-    """High vs Low-value Customer Segmentation"""
-    st.header("💎 Customer Value Segmentation")
+    """High vs Low Value Customer Segmentation"""
+    st.header("💎 High vs Low Value Customer Segmentation")
+    
+    if df is None or df.empty:
+        st.error("No data available for analysis")
+        return
     
     # Calculate customer metrics
     customer_metrics = df.groupby('customer_id').agg({
-        'price': ['sum', 'count', 'mean']
+        'price': ['sum', 'count', 'mean'],
+        'quantity': 'sum'
     }).round(2)
     
-    customer_metrics.columns = ['total_revenue', 'transaction_count', 'avg_order_value']
-    customer_metrics = customer_metrics.sort_values('total_revenue', ascending=False)
+    customer_metrics.columns = ['total_revenue', 'transaction_count', 'avg_order_value', 'total_quantity']
     
-    # Value segmentation using quantiles
-    high_threshold = customer_metrics['total_revenue'].quantile(0.8)
-    medium_threshold = customer_metrics['total_revenue'].quantile(0.5)
+    # Create value segments based on total spend
+    high_value_threshold = customer_metrics['total_revenue'].quantile(0.8)
+    medium_value_threshold = customer_metrics['total_revenue'].quantile(0.5)
     
     def assign_value_segment(revenue):
-        if revenue >= high_threshold:
+        if revenue >= high_value_threshold:
             return 'High Value'
-        elif revenue >= medium_threshold:
+        elif revenue >= medium_value_threshold:
             return 'Medium Value'
         else:
             return 'Low Value'
@@ -255,92 +290,91 @@ def value_segmentation(df):
     }).round(2)
     
     segment_analysis.columns = ['total_revenue', 'customer_count', 'avg_revenue', 'avg_transactions', 'avg_order_value']
+    segment_analysis['percentage'] = (segment_analysis['customer_count'] / len(customer_metrics) * 100).round(1)
     
     # Key metrics
     col1, col2, col3 = st.columns(3)
     with col1:
-        high_value = customer_metrics[customer_metrics['value_segment'] == 'High Value']
-        st.metric("High Value Customers", f"{len(high_value):,}", f"{len(high_value)/len(customer_metrics)*100:.1f}%")
+        high_value_count = segment_analysis.loc['High Value', 'customer_count']
+        high_value_pct = segment_analysis.loc['High Value', 'percentage']
+        st.metric("High Value Customers", f"{high_value_count:,.0f}", f"{high_value_pct:.1f}%")
     with col2:
-        medium_value = customer_metrics[customer_metrics['value_segment'] == 'Medium Value']
-        st.metric("Medium Value Customers", f"{len(medium_value):,}", f"{len(medium_value)/len(customer_metrics)*100:.1f}%")
+        medium_value_count = segment_analysis.loc['Medium Value', 'customer_count']
+        medium_value_pct = segment_analysis.loc['Medium Value', 'percentage']
+        st.metric("Medium Value Customers", f"{medium_value_count:,.0f}", f"{medium_value_pct:.1f}%")
     with col3:
-        low_value = customer_metrics[customer_metrics['value_segment'] == 'Low Value']
-        st.metric("Low Value Customers", f"{len(low_value):,}", f"{len(low_value)/len(customer_metrics)*100:.1f}%")
+        low_value_count = segment_analysis.loc['Low Value', 'customer_count']
+        low_value_pct = segment_analysis.loc['Low Value', 'percentage']
+        st.metric("Low Value Customers", f"{low_value_count:,.0f}", f"{low_value_pct:.1f}%")
     
     # Visualizations
     col1, col2 = st.columns(2)
     
     with col1:
-        fig_segments = px.pie(
-            segment_analysis,
-            values='customer_count',
+        fig_dist = px.pie(
+            values=segment_analysis['customer_count'],
             names=segment_analysis.index,
             title="Customer Distribution by Value Segment",
             color_discrete_sequence=px.colors.qualitative.Set3
         )
-        st.plotly_chart(fig_segments, use_container_width=True)
+        st.plotly_chart(fig_dist, use_container_width=True)
     
     with col2:
         fig_revenue = px.bar(
-            segment_analysis,
             x=segment_analysis.index,
-            y='total_revenue',
+            y=segment_analysis['total_revenue'],
             title="Revenue by Customer Value Segment",
-            labels={'x': 'Customer Segment', 'y': 'Revenue ($)'},
-            color='total_revenue',
+            labels={'x': 'Value Segment', 'y': 'Revenue ($)'},
+            color=segment_analysis['total_revenue'],
             color_continuous_scale='Greens'
         )
-        fig_revenue.update_layout(showlegend=False)
         st.plotly_chart(fig_revenue, use_container_width=True)
     
-    # Value segment performance table
-    st.subheader("📈 Value Segment Performance Analysis")
-    segment_analysis['revenue_share'] = (segment_analysis['total_revenue'] / segment_analysis['total_revenue'].sum() * 100).round(2)
-    segment_analysis['customer_share'] = (segment_analysis['customer_count'] / segment_analysis['customer_count'].sum() * 100).round(2)
-    
-    display_df = segment_analysis[['customer_count', 'total_revenue', 'avg_revenue', 'avg_transactions', 'avg_order_value', 'revenue_share', 'customer_share']].copy()
-    display_df.columns = ['Customers', 'Total Revenue ($)', 'Avg Revenue ($)', 'Avg Transactions', 'Avg Order Value ($)', 'Revenue Share (%)', 'Customer Share (%)']
+    # Value segment performance analysis
+    st.subheader("📊 Value Segment Performance Analysis")
+    display_df = segment_analysis.reset_index()
+    display_df = display_df[['value_segment', 'customer_count', 'percentage', 'total_revenue', 'avg_revenue', 'avg_transactions', 'avg_order_value']]
+    display_df.columns = ['Value Segment', 'Customer Count', 'Percentage (%)', 'Total Revenue ($)', 'Avg Revenue ($)', 'Avg Transactions', 'Avg Order Value ($)']
     
     st.dataframe(display_df, use_container_width=True)
+    
+    # Customer performance summary
+    st.subheader("👥 Customer Performance Summary")
+    customer_summary = customer_metrics.copy()
+    customer_summary = customer_summary.sort_values('total_revenue', ascending=False)
+    customer_summary['revenue_rank'] = customer_summary['total_revenue'].rank(ascending=False, method='dense').astype(int)
+    
+    display_cols = ['customer_id', 'total_revenue', 'transaction_count', 'avg_order_value', 'value_segment', 'revenue_rank']
+    st.dataframe(customer_summary[display_cols].head(20), use_container_width=True)
 
 def main():
-    """Main application function"""
-    st.markdown('<h1 class="main-header">📊 Retail Analytics Dashboard</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-header">🛍️ Retail Analytics Dashboard</h1>', unsafe_allow_html=True)
     
     # Load data
     df = load_data()
+    
     if df is None:
-        st.error("Could not load data. Please ensure customer_shopping.csv is available.")
+        st.error("Failed to load data. Please check if 'customer_shopping.csv' exists.")
         return
     
-    # Sidebar navigation
+    # Sidebar
     st.sidebar.title("📊 Analysis Options")
     analysis_type = st.sidebar.selectbox(
         "Select Analysis",
         [
             "Store vs Region Performance",
-            "Top 10% Customers",
-            "Customer Value Segmentation",
-            "Discount Impact Analysis",
-            "Seasonality Analysis",
-            "Payment Method Analysis",
-            "RFM Analysis",
-            "Repeat Customer Analysis",
-            "Category Insights",
-            "Campaign Simulation"
+            "Top 10% Customers Analysis",
+            "High vs Low Value Segmentation"
         ]
     )
     
     # Display selected analysis
     if analysis_type == "Store vs Region Performance":
         store_region_performance(df)
-    elif analysis_type == "Top 10% Customers":
+    elif analysis_type == "Top 10% Customers Analysis":
         top_customers_analysis(df)
-    elif analysis_type == "Customer Value Segmentation":
+    elif analysis_type == "High vs Low Value Segmentation":
         value_segmentation(df)
-    else:
-        st.info(f"🚧 {analysis_type} analysis is coming soon! Please select another option.")
 
 if __name__ == "__main__":
     main()
