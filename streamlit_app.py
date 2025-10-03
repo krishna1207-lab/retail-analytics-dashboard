@@ -459,18 +459,69 @@ def show_customer_segmentation_rfm():
         # Create RFM segments
         rfm_data['RFM_Segment'] = rfm_data['R_score'].astype(str) + rfm_data['F_score'].astype(str) + rfm_data['M_score'].astype(str)
         
-        # Define segment names
-        segment_mapping = {
-            '555': 'Champions', '554': 'Champions', '544': 'Champions', '545': 'Champions',
-            '455': 'Loyal Customers', '454': 'Loyal Customers', '445': 'Loyal Customers',
-            '355': 'Potential Loyalists', '354': 'Potential Loyalists', '345': 'Potential Loyalists',
-            '255': 'New Customers', '254': 'New Customers', '245': 'New Customers',
-            '155': 'Promising', '154': 'Promising', '145': 'Promising',
-            '111': 'Lost Customers', '112': 'Lost Customers', '113': 'Lost Customers',
-            '211': 'At Risk', '212': 'At Risk', '213': 'At Risk'
-        }
+        # Define segment names with more comprehensive mapping
+        def assign_rfm_segment(row):
+            r, f, m = row['R_score'], row['F_score'], row['M_score']
+            
+            # Convert to numeric for easier comparison
+            try:
+                r_num = int(str(r)) if pd.notna(r) else 1
+                f_num = int(str(f)) if pd.notna(f) else 1
+                m_num = int(str(m)) if pd.notna(m) else 1
+            except:
+                return 'Others'
+            
+            # Champions: High R, F, M
+            if r_num >= 4 and f_num >= 4 and m_num >= 4:
+                return 'Champions'
+            # Loyal Customers: High F, M, Medium R
+            elif f_num >= 4 and m_num >= 3 and r_num >= 3:
+                return 'Loyal Customers'
+            # Potential Loyalists: High R, Medium F, M
+            elif r_num >= 4 and f_num >= 2 and m_num >= 2:
+                return 'Potential Loyalists'
+            # New Customers: High R, Low F, M
+            elif r_num >= 4 and f_num <= 2 and m_num >= 2:
+                return 'New Customers'
+            # Promising: High R, Low F, Low M
+            elif r_num >= 4 and f_num <= 2 and m_num <= 2:
+                return 'Promising'
+            # At Risk: Low R, High F, M
+            elif r_num <= 2 and f_num >= 3 and m_num >= 3:
+                return 'At Risk'
+            # Lost Customers: Low R, F, M
+            elif r_num <= 2 and f_num <= 2 and m_num <= 2:
+                return 'Lost Customers'
+            # Cannot Lose Them: Low R, High F, M
+            elif r_num <= 2 and f_num >= 4 and m_num >= 4:
+                return 'Cannot Lose Them'
+            # Hibernating: Low R, F, Medium M
+            elif r_num <= 2 and f_num <= 3 and m_num >= 3:
+                return 'Hibernating'
+            else:
+                return 'Others'
         
-        rfm_data['RFM_Segment'] = rfm_data['RFM_Segment'].map(segment_mapping).fillna('Others')
+        rfm_data['RFM_Segment'] = rfm_data.apply(assign_rfm_segment, axis=1)
+        
+        # Debug information
+        st.subheader("🔍 RFM Analysis Debug Info")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total Customers Analyzed", f"{len(rfm_data):,}")
+        with col2:
+            st.metric("Unique RFM Segments", f"{rfm_data['RFM_Segment'].nunique()}")
+        with col3:
+            st.metric("Avg Recency (days)", f"{rfm_data['recency'].mean():.1f}")
+        
+        # Show RFM score distribution
+        st.write("**RFM Score Distribution:**")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.write("Recency Scores:", rfm_data['R_score'].value_counts().sort_index())
+        with col2:
+            st.write("Frequency Scores:", rfm_data['F_score'].value_counts().sort_index())
+        with col3:
+            st.write("Monetary Scores:", rfm_data['M_score'].value_counts().sort_index())
         
         col1, col2 = st.columns(2)
         
@@ -510,16 +561,34 @@ def show_customer_segmentation_rfm():
         at_risk = rfm_data[rfm_data['RFM_Segment'] == 'At Risk']
         lost_customers = rfm_data[rfm_data['RFM_Segment'] == 'Lost Customers']
         loyal_customers = rfm_data[rfm_data['RFM_Segment'] == 'Loyal Customers']
+        new_customers = rfm_data[rfm_data['RFM_Segment'] == 'New Customers']
+        potential_loyalists = rfm_data[rfm_data['RFM_Segment'] == 'Potential Loyalists']
         
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3 = st.columns(3)
         with col1:
             st.metric("Champions", f"{len(champions):,}", f"{len(champions)/len(rfm_data)*100:.1f}%")
         with col2:
-            st.metric("At Risk", f"{len(at_risk):,}", f"{len(at_risk)/len(rfm_data)*100:.1f}%")
-        with col3:
-            st.metric("Lost Customers", f"{len(lost_customers):,}", f"{len(lost_customers)/len(rfm_data)*100:.1f}%")
-        with col4:
             st.metric("Loyal Customers", f"{len(loyal_customers):,}", f"{len(loyal_customers)/len(rfm_data)*100:.1f}%")
+        with col3:
+            st.metric("New Customers", f"{len(new_customers):,}", f"{len(new_customers)/len(rfm_data)*100:.1f}%")
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("At Risk", f"{len(at_risk):,}", f"{len(at_risk)/len(rfm_data)*100:.1f}%")
+        with col2:
+            st.metric("Lost Customers", f"{len(lost_customers):,}", f"{len(lost_customers)/len(rfm_data)*100:.1f}%")
+        with col3:
+            st.metric("Potential Loyalists", f"{len(potential_loyalists):,}", f"{len(potential_loyalists)/len(rfm_data)*100:.1f}%")
+        
+        # Show segment distribution
+        st.subheader("📊 Complete Segment Distribution")
+        segment_counts = rfm_data['RFM_Segment'].value_counts()
+        fig_segments = px.pie(
+            values=segment_counts.values,
+            names=segment_counts.index,
+            title="Customer Distribution by RFM Segment"
+        )
+        st.plotly_chart(fig_segments, use_container_width=True)
 
 def show_profitability_analysis():
     """Profitability Analysis - Combines Financial Analysis + Discount Impact"""
