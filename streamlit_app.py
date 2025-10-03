@@ -388,10 +388,26 @@ def show_customer_segmentation_rfm():
     # RFM Analysis
     st.subheader("📊 RFM Analysis")
     
-    # Convert invoice_date to datetime
+    # Convert invoice_date to datetime with better error handling
     from datetime import datetime
-    customer_data['invoice_date'] = pd.to_datetime(customer_data['invoice_date'], errors='coerce')
+    try:
+        # Try different date formats
+        customer_data['invoice_date'] = pd.to_datetime(customer_data['invoice_date'], format='%d/%m/%Y', errors='coerce')
+        # Fill any NaT values with alternative format
+        mask = customer_data['invoice_date'].isna()
+        if mask.any():
+            customer_data.loc[mask, 'invoice_date'] = pd.to_datetime(customer_data.loc[mask, 'invoice_date'], format='%m/%d/%Y', errors='coerce')
+    except:
+        # Fallback to automatic parsing
+        customer_data['invoice_date'] = pd.to_datetime(customer_data['invoice_date'], errors='coerce')
+    
+    # Remove rows with invalid dates
     customer_data = customer_data.dropna(subset=['invoice_date'])
+    
+    # Check if we have valid data after date processing
+    if customer_data.empty:
+        st.error("No valid data available after date processing. Please check your data format.")
+        return
     
     # Calculate RFM metrics
     rfm_data = customer_data.groupby('customer_id').agg({
@@ -407,7 +423,27 @@ def show_customer_segmentation_rfm():
     rfm_data['recency'] = (datetime.now() - rfm_data['invoice_date']).dt.days
     rfm_data['recency'] = rfm_data['recency'].clip(lower=0)
     
-    # Create RFM scores (1-5 scale) with error handling
+    # Debug information
+    st.subheader("🔍 RFM Analysis Debug Info")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Total Customers Analyzed", f"{len(rfm_data):,}")
+    with col2:
+        st.metric("Avg Recency (days)", f"{rfm_data['recency'].mean():.1f}")
+    with col3:
+        st.metric("Avg Frequency", f"{rfm_data['frequency'].mean():.1f}")
+    
+    # Show RFM score distribution
+    st.write("**RFM Score Distribution:**")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.write("Recency Range:", f"{rfm_data['recency'].min():.0f} - {rfm_data['recency'].max():.0f} days")
+    with col2:
+        st.write("Frequency Range:", f"{rfm_data['frequency'].min():.0f} - {rfm_data['frequency'].max():.0f}")
+    with col3:
+        st.write("Monetary Range:", f"${rfm_data['monetary'].min():.0f} - ${rfm_data['monetary'].max():.0f}")
+    
+    # Create RFM scores (1-5 scale) with better error handling
     try:
         rfm_data['R_score'] = pd.qcut(rfm_data['recency'], 5, labels=[5,4,3,2,1], duplicates='drop')
     except:
@@ -423,27 +459,50 @@ def show_customer_segmentation_rfm():
     except:
         rfm_data['M_score'] = pd.cut(rfm_data['monetary'], 5, labels=[1,2,3,4,5])
     
-    # Create RFM segments with comprehensive mapping
+    # Show score distributions
+    st.write("**Score Distributions:**")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.write("R Scores:", rfm_data['R_score'].value_counts().sort_index())
+    with col2:
+        st.write("F Scores:", rfm_data['F_score'].value_counts().sort_index())
+    with col3:
+        st.write("M Scores:", rfm_data['M_score'].value_counts().sort_index())
+    
+    # Create RFM segments with more flexible mapping
     def assign_rfm_segment(row):
         r, f, m = row['R_score'], row['F_score'], row['M_score']
         
         try:
-            r_num = int(str(r)) if pd.notna(r) else 1
-            f_num = int(str(f)) if pd.notna(f) else 1
-            m_num = int(str(m)) if pd.notna(m) else 1
+            # Convert to numeric, handling both string and numeric types
+            if pd.isna(r) or str(r) == 'nan':
+                r_num = 1
+            else:
+                r_num = int(float(str(r)))
+                
+            if pd.isna(f) or str(f) == 'nan':
+                f_num = 1
+            else:
+                f_num = int(float(str(f)))
+                
+            if pd.isna(m) or str(m) == 'nan':
+                m_num = 1
+            else:
+                m_num = int(float(str(m)))
         except:
             return 'Others'
         
-        # Champions: High R, F, M
+        # More flexible RFM segment assignment
+        # Champions: High R, F, M (4-5 range)
         if r_num >= 4 and f_num >= 4 and m_num >= 4:
             return 'Champions'
-        # Loyal Customers: High F, M, Medium R
-        elif f_num >= 4 and m_num >= 3 and r_num >= 3:
+        # Loyal Customers: High F, M, Medium+ R
+        elif f_num >= 4 and m_num >= 3 and r_num >= 2:
             return 'Loyal Customers'
-        # Potential Loyalists: High R, Medium F, M
+        # Potential Loyalists: High R, Medium+ F, M
         elif r_num >= 4 and f_num >= 2 and m_num >= 2:
             return 'Potential Loyalists'
-        # New Customers: High R, Low F, M
+        # New Customers: High R, Low F, Medium+ M
         elif r_num >= 4 and f_num <= 2 and m_num >= 2:
             return 'New Customers'
         # Promising: High R, Low F, Low M
@@ -458,13 +517,21 @@ def show_customer_segmentation_rfm():
         # Cannot Lose Them: Low R, High F, M
         elif r_num <= 2 and f_num >= 4 and m_num >= 4:
             return 'Cannot Lose Them'
-        # Hibernating: Low R, F, Medium M
+        # Hibernating: Low R, F, Medium+ M
         elif r_num <= 2 and f_num <= 3 and m_num >= 3:
             return 'Hibernating'
+        # Need Attention: Medium R, F, M
+        elif r_num == 3 and f_num == 3 and m_num == 3:
+            return 'Need Attention'
         else:
             return 'Others'
     
     rfm_data['RFM_Segment'] = rfm_data.apply(assign_rfm_segment, axis=1)
+    
+    # Show segment distribution for debugging
+    st.write("**RFM Segment Distribution:**")
+    segment_counts = rfm_data['RFM_Segment'].value_counts()
+    st.write(segment_counts)
     
     # RFM Analysis Results
     st.subheader("📊 RFM Analysis Results")
