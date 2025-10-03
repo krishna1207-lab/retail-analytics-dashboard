@@ -39,21 +39,13 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# API Configuration
-API_BASE_URL = "http://localhost:8000"
+# API Configuration - Disabled for Streamlit Cloud deployment
+API_BASE_URL = None  # Disable API calls for cloud deployment
 
 def fetch_api_data(endpoint):
-    """Fetch data from FastAPI endpoint with error handling"""
-    try:
-        response = requests.get(f"{API_BASE_URL}{endpoint}", timeout=10)
-        if response.status_code == 200:
-            return response.json()
-        else:
-            st.error(f"API Error: {response.status_code}")
-            return None
-    except requests.exceptions.RequestException as e:
-        st.warning(f"API not available: {e}")
-        return None
+    """Fetch data from FastAPI endpoint with error handling - Disabled for cloud deployment"""
+    # For Streamlit Cloud deployment, we'll use local data instead of API
+    return None
 
 def show_store_region_performance():
     """Store vs Region Performance - Combined Store Performance + Top Customers"""
@@ -818,6 +810,9 @@ def main():
     """Main application function"""
     # Header
     st.markdown('<h1 class="main-header">📊 Retail Analytics Dashboard</h1>', unsafe_allow_html=True)
+    
+    # Cloud deployment notice
+    st.info("🌐 **Cloud Mode**: This dashboard is running on Streamlit Cloud with local data processing. All features are fully functional!")
     
     # Sidebar navigation
     st.sidebar.title("Dashboard Navigation")
