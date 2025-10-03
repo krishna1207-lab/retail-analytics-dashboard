@@ -407,8 +407,25 @@ def show_customer_segmentation_rfm():
         # Calculate RFM metrics from local data
         from datetime import datetime
         
-        # Convert invoice_date to datetime
-        customer_data['invoice_date'] = pd.to_datetime(customer_data['invoice_date'])
+        # Convert invoice_date to datetime with error handling for mixed formats
+        try:
+            # Try different date formats
+            customer_data['invoice_date'] = pd.to_datetime(customer_data['invoice_date'], format='%d/%m/%Y', errors='coerce')
+            # Fill any NaT values with alternative format
+            mask = customer_data['invoice_date'].isna()
+            if mask.any():
+                customer_data.loc[mask, 'invoice_date'] = pd.to_datetime(customer_data.loc[mask, 'invoice_date'], format='%m/%d/%Y', errors='coerce')
+        except:
+            # Fallback to automatic parsing
+            customer_data['invoice_date'] = pd.to_datetime(customer_data['invoice_date'], errors='coerce')
+        
+        # Remove rows with invalid dates
+        customer_data = customer_data.dropna(subset=['invoice_date'])
+        
+        # Check if we have valid data after date processing
+        if customer_data.empty:
+            st.error("No valid data available after date processing. Please check your data format.")
+            return
         
         # Calculate RFM metrics
         rfm_data = customer_data.groupby('customer_id').agg({
@@ -420,10 +437,24 @@ def show_customer_segmentation_rfm():
         # Calculate recency (days since last purchase)
         rfm_data['recency'] = (datetime.now() - rfm_data['invoice_date']).dt.days
         
-        # Create RFM scores (1-5 scale)
-        rfm_data['R_score'] = pd.qcut(rfm_data['recency'], 5, labels=[5,4,3,2,1])
-        rfm_data['F_score'] = pd.qcut(rfm_data['frequency'], 5, labels=[1,2,3,4,5])
-        rfm_data['M_score'] = pd.qcut(rfm_data['monetary'], 5, labels=[1,2,3,4,5])
+        # Handle any negative recency values (future dates)
+        rfm_data['recency'] = rfm_data['recency'].clip(lower=0)
+        
+        # Create RFM scores (1-5 scale) with error handling
+        try:
+            rfm_data['R_score'] = pd.qcut(rfm_data['recency'], 5, labels=[5,4,3,2,1], duplicates='drop')
+        except:
+            rfm_data['R_score'] = pd.cut(rfm_data['recency'], 5, labels=[5,4,3,2,1])
+        
+        try:
+            rfm_data['F_score'] = pd.qcut(rfm_data['frequency'], 5, labels=[1,2,3,4,5], duplicates='drop')
+        except:
+            rfm_data['F_score'] = pd.cut(rfm_data['frequency'], 5, labels=[1,2,3,4,5])
+        
+        try:
+            rfm_data['M_score'] = pd.qcut(rfm_data['monetary'], 5, labels=[1,2,3,4,5], duplicates='drop')
+        except:
+            rfm_data['M_score'] = pd.cut(rfm_data['monetary'], 5, labels=[1,2,3,4,5])
         
         # Create RFM segments
         rfm_data['RFM_Segment'] = rfm_data['R_score'].astype(str) + rfm_data['F_score'].astype(str) + rfm_data['M_score'].astype(str)
