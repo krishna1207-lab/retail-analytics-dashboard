@@ -400,6 +400,9 @@ def show_customer_segmentation_rfm():
         'price': 'sum'  # Monetary
     }).rename(columns={'customer_id': 'frequency', 'price': 'monetary'})
     
+    # Reset index to get customer_id as a column
+    rfm_data = rfm_data.reset_index()
+    
     # Calculate recency (days since last purchase)
     rfm_data['recency'] = (datetime.now() - rfm_data['invoice_date']).dt.days
     rfm_data['recency'] = rfm_data['recency'].clip(lower=0)
