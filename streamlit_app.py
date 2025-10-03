@@ -48,8 +48,8 @@ def fetch_api_data(endpoint):
     return None
 
 def show_store_region_performance():
-    """Store vs Region Performance - Combined Store Performance + Top Customers"""
-    st.header("🏪 Store/Region Performance")
+    """Store vs Region Performance - Compare sales volume and revenue across stores and regions"""
+    st.header("🏪 Store vs Region Performance")
     
     # Load data from local files
     try:
@@ -96,35 +96,153 @@ def show_store_region_performance():
         # Calculate store performance from local data
         if 'shopping_mall' in customer_data.columns:
             store_performance = customer_data.groupby('shopping_mall').agg({
-                'price': ['sum', 'count'],
-                'customer_id': 'nunique'
+                'price': ['sum', 'count', 'mean'],
+                'customer_id': 'nunique',
+                'quantity': 'sum'
             }).round(2)
-            store_performance.columns = ['total_revenue', 'transaction_count', 'unique_customers']
+            
+            store_performance.columns = ['total_revenue', 'transaction_count', 'avg_order_value', 'unique_customers', 'total_quantity']
             store_performance = store_performance.reset_index()
+            store_performance = store_performance.sort_values('total_revenue', ascending=False)
+            
+            # Key Performance Metrics
+            st.subheader("📊 Key Performance Metrics")
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Total Stores", f"{len(store_performance)}")
+            with col2:
+                st.metric("Total Revenue", f"${store_performance['total_revenue'].sum():,.2f}")
+            with col3:
+                st.metric("Total Transactions", f"{store_performance['transaction_count'].sum():,}")
+            with col4:
+                st.metric("Avg Revenue per Store", f"${store_performance['total_revenue'].mean():,.2f}")
+            
+            # Store Performance Comparison
+            st.subheader("🏪 Store Performance Comparison")
             
             col1, col2 = st.columns(2)
             
             with col1:
-                fig_store = px.bar(
+                # Revenue by Store (Sorted)
+                fig_revenue = px.bar(
                     store_performance,
                     x='shopping_mall',
                     y='total_revenue',
-                    title="Revenue by Shopping Mall",
-                    labels={'shopping_mall': 'Shopping Mall', 'total_revenue': 'Revenue ($)'}
+                    title="Revenue by Store (Sorted by Revenue)",
+                    labels={'shopping_mall': 'Store', 'total_revenue': 'Revenue ($)'},
+                    color='total_revenue',
+                    color_continuous_scale='Blues'
                 )
-                fig_store.update_layout(xaxis_tickangle=45)
-                st.plotly_chart(fig_store, use_container_width=True)
+                fig_revenue.update_layout(xaxis_tickangle=45, showlegend=False)
+                st.plotly_chart(fig_revenue, use_container_width=True)
             
             with col2:
+                # Transaction Volume by Store (Sorted)
                 fig_transactions = px.bar(
                     store_performance,
                     x='shopping_mall',
                     y='transaction_count',
-                    title="Transactions by Shopping Mall",
-                    labels={'shopping_mall': 'Shopping Mall', 'transaction_count': 'Transaction Count'}
+                    title="Transaction Volume by Store (Sorted by Revenue)",
+                    labels={'shopping_mall': 'Store', 'transaction_count': 'Transaction Count'},
+                    color='transaction_count',
+                    color_continuous_scale='Greens'
                 )
-                fig_transactions.update_layout(xaxis_tickangle=45)
+                fig_transactions.update_layout(xaxis_tickangle=45, showlegend=False)
                 st.plotly_chart(fig_transactions, use_container_width=True)
+            
+            # Store Efficiency Analysis
+            st.subheader("⚡ Store Efficiency Analysis")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Average Order Value by Store
+                fig_aov = px.bar(
+                    store_performance,
+                    x='shopping_mall',
+                    y='avg_order_value',
+                    title="Average Order Value by Store (Sorted by Revenue)",
+                    labels={'shopping_mall': 'Store', 'avg_order_value': 'Average Order Value ($)'},
+                    color='avg_order_value',
+                    color_continuous_scale='Oranges'
+                )
+                fig_aov.update_layout(xaxis_tickangle=45, showlegend=False)
+                st.plotly_chart(fig_aov, use_container_width=True)
+            
+            with col2:
+                # Customer Count by Store
+                fig_customers = px.bar(
+                    store_performance,
+                    x='shopping_mall',
+                    y='unique_customers',
+                    title="Customer Count by Store (Sorted by Revenue)",
+                    labels={'shopping_mall': 'Store', 'unique_customers': 'Unique Customers'},
+                    color='unique_customers',
+                    color_continuous_scale='Purples'
+                )
+                fig_customers.update_layout(xaxis_tickangle=45, showlegend=False)
+                st.plotly_chart(fig_customers, use_container_width=True)
+            
+            # Store Performance Summary Table
+            st.subheader("📋 Store Performance Summary")
+            
+            # Add performance rankings
+            store_performance['revenue_rank'] = store_performance['total_revenue'].rank(ascending=False, method='dense').astype(int)
+            store_performance['transaction_rank'] = store_performance['transaction_count'].rank(ascending=False, method='dense').astype(int)
+            store_performance['aov_rank'] = store_performance['avg_order_value'].rank(ascending=False, method='dense').astype(int)
+            
+            # Display the sorted table
+            display_columns = ['shopping_mall', 'total_revenue', 'transaction_count', 'avg_order_value', 'unique_customers', 'revenue_rank']
+            display_df = store_performance[display_columns].copy()
+            display_df.columns = ['Store', 'Total Revenue ($)', 'Transactions', 'Avg Order Value ($)', 'Unique Customers', 'Revenue Rank']
+            
+            st.dataframe(display_df, use_container_width=True)
+            
+            # Top and Bottom Performers
+            st.subheader("🏆 Top & Bottom Performers")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.write("**🥇 Top 3 Stores by Revenue:**")
+                top_stores = store_performance.head(3)
+                for idx, row in top_stores.iterrows():
+                    st.write(f"**{row['revenue_rank']}.** {row['shopping_mall']} - ${row['total_revenue']:,.2f}")
+            
+            with col2:
+                st.write("**📉 Bottom 3 Stores by Revenue:**")
+                bottom_stores = store_performance.tail(3)
+                for idx, row in bottom_stores.iterrows():
+                    st.write(f"**{row['revenue_rank']}.** {row['shopping_mall']} - ${row['total_revenue']:,.2f}")
+            
+            # Performance Insights
+            st.subheader("💡 Performance Insights")
+            
+            best_store = store_performance.iloc[0]
+            worst_store = store_performance.iloc[-1]
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.metric(
+                    "Best Performing Store", 
+                    best_store['shopping_mall'],
+                    f"${best_store['total_revenue']:,.2f}"
+                )
+            with col2:
+                revenue_gap = best_store['total_revenue'] - worst_store['total_revenue']
+                st.metric(
+                    "Revenue Gap (Best vs Worst)", 
+                    f"${revenue_gap:,.2f}",
+                    f"{((best_store['total_revenue'] / worst_store['total_revenue'] - 1) * 100):.1f}%"
+                )
+            with col3:
+                avg_transactions = store_performance['transaction_count'].mean()
+                st.metric(
+                    "Average Transactions per Store", 
+                    f"{avg_transactions:,.0f}",
+                    f"±{store_performance['transaction_count'].std():.0f}"
+                )
         else:
             st.warning("Shopping Mall column not found in data. Showing general performance metrics.")
             
@@ -139,64 +257,6 @@ def show_store_region_performance():
             with col4:
                 st.metric("Average Order Value", f"${customer_data['price'].mean():.2f}")
     
-    # Top Customers
-    st.subheader("👑 Top Customers Analysis")
-    top_customers_data = fetch_api_data("/insights/top-customers")
-    
-    if top_customers_data:
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            # Top customers by revenue
-            top_customers = pd.DataFrame(top_customers_data['top_customers'])
-            fig_top = px.bar(
-                top_customers.head(10),
-                x='customer_id',
-                y='total_revenue',
-                title="Top 10 Customers by Revenue",
-                labels={'customer_id': 'Customer ID', 'total_revenue': 'Revenue ($)'}
-            )
-            fig_top.update_layout(xaxis_tickangle=45)
-            st.plotly_chart(fig_top, use_container_width=True)
-        
-        with col2:
-            # Customer distribution
-            fig_dist = px.pie(
-                top_customers.head(10),
-                values='total_revenue',
-                names='customer_id',
-                title="Revenue Distribution - Top 10 Customers"
-            )
-    else:
-        # Fallback: Calculate top customers from local data
-        top_customers_local = customer_data.groupby('customer_id').agg({
-            'price': 'sum',
-            'customer_id': 'count'
-        }).rename(columns={'customer_id': 'transaction_count'})
-        top_customers_local = top_customers_local.reset_index()
-        top_customers_local = top_customers_local.sort_values('price', ascending=False).head(10)
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            fig_top = px.bar(
-                top_customers_local,
-                x='customer_id',
-                y='price',
-                title="Top 10 Customers by Revenue",
-                labels={'customer_id': 'Customer ID', 'price': 'Revenue ($)'}
-            )
-            fig_top.update_layout(xaxis_tickangle=45)
-            st.plotly_chart(fig_top, use_container_width=True)
-        
-        with col2:
-            fig_dist = px.pie(
-                top_customers_local,
-                values='price',
-                names='customer_id',
-                title="Revenue Distribution - Top 10 Customers"
-            )
-            st.plotly_chart(fig_dist, use_container_width=True)
 
 def show_customer_segmentation_rfm():
     """Customer Segmentation & RFM - Combined Customer Insights + RFM Analysis"""
